@@ -39,9 +39,9 @@ def save_plot_of_counts(counts):
   counts_keys = [country_names[code] for code in counts_keys]
 
   rects = plt.bar(counts_keys, counts_values)
-  plt.bar_label(rects)
+  plt.bar_label(rects, rotation=90)
   plt.xticks(rotation=90)
-  plt.xlabel('Kraj')
+  plt.xlabel('Nazwa kraju')
   plt.ylabel('Liczba tweetów')
   plt.title('Liczba wystąpień tweetów w poszczególnych krajach')
   plt.ylim(0, 1.1*max(counts_values))

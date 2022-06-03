@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import datetime
-
+from typing import List
+from get_users_liked import get_users
 
 
 class Table:
@@ -61,16 +62,23 @@ class Tweets(Table):
                 %s,\
                 %s,\
                 %s,\
-                %s)"
+                %s)\
+                ON DUPLICATE KEY UPDATE\
+                id = VALUES(id)"
     
     @property
     def sql_delete(self):
         return "DELETE FROM tweets"
 
    
-    def get_data(self, response: dict) -> list:
+    def get_data(self, response: dict, db) -> list:
         final_data = []
+        user = Users(self.cursor)
         for tweet in response['data']:
+            # users_liked = ",".join([element['id'] for element in tweet['users_liked']])
+            # user.insert_many(get_users(users_liked))
+            # db.commit()
+            # print(self.cursor.rowcount, "was inserted.")
             values = []
             values.append(tweet["id"])
             values.append(tweet["author_id"])
@@ -91,8 +99,8 @@ class Tweets(Table):
         return final_data
 
    
-    def insert_many(self, json_response):
-        return self.cursor.executemany(self.sql_insert, self.get_data(json_response))
+    def insert_many(self, json_response, db):
+        return self.cursor.executemany(self.sql_insert, self.get_data(json_response, db))
 
     def delete_rows(self):
         return self.cursor.execute(self.sql_delete)  
@@ -114,8 +122,9 @@ class Places:
                 %s,\
                 %s,\
                 %s,\
-                %s)"
-    
+                %s)\
+                ON DUPLICATE KEY UPDATE\
+                id = VALUES(id)"
     @property
     def sql_delete(self):
         return "DELETE FROM places"
@@ -174,16 +183,18 @@ class Users:
                 %s,\
                 %s,\
                 %s,\
-                %s)"
+                %s)\
+                ON DUPLICATE KEY UPDATE\
+                id = VALUES(id)"
     
     @property
     def sql_delete(self):
         return "DELETE FROM users"
 
    
-    def get_data(self, response: dict) -> list:
+    def get_data(self, response: List[dict]) -> List[list]:
         users = []
-        for user in response['includes'].get('users', []):
+        for user in response:
             users_columns = []
             users_columns.append(user["id"])
             users_columns.append(user.get("name", None))
@@ -218,9 +229,13 @@ class PlacesCoordinates:
     def sql_insert(self):
         return  "INSERT INTO place_coordinates (\
                 id,\
-                latitude,\
-                longitude)\
+                left_c,\
+                bottom,\
+                right_c,\
+                top)\
                 VALUES(%s,%s,\
+                %s,\
+                %s,\
                 %s)"
     
     @property
@@ -230,21 +245,64 @@ class PlacesCoordinates:
    
     def get_data(self, response: dict) -> list:
         coordinates = []
-        for coordinate in response['data']:
+        for coordinate in response['includes'].get('places', []):
             coordinate_columns = []
-            if "geo" and "coordinates" in coordinate:
-                coordinate_columns.append(coordinate["geo"]["place_id"])
-                coordinate_columns.append(coordinate["geo"]["coordinates"]["coordinates"][0])
-                coordinate_columns.append(coordinate["geo"]["coordinates"]["coordinates"][1])          
+            coordinate_columns.append(coordinate["id"])
+            if "geo"  in coordinate:                
+                coordinate_columns.append(coordinate["geo"]["bbox"][0])
+                coordinate_columns.append(coordinate["geo"]["bbox"][1])
+                coordinate_columns.append(coordinate["geo"]["bbox"][2])
+                coordinate_columns.append(coordinate["geo"]["bbox"][3])
             else:
                 coordinate_columns.append(None)  
                 coordinate_columns.append(None) 
+                coordinate_columns.append(None)  
                 coordinate_columns.append(None)  
             coordinates.append(coordinate_columns)
         return coordinates
 
         
     def insert_many(self, json_response):
+        return self.cursor.executemany(self.sql_insert , self.get_data(json_response))
+
+
+    def delete_rows(self):
+        return self.cursor.execute(self.sql_delete)
+
+
+class UsersLiked:
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    @property
+    def sql_insert(self):
+        return  "INSERT INTO users_liked (\
+                tweet_id,\
+                user_id)\
+                VALUES(%s,%s)\
+                ON DUPLICATE KEY UPDATE\
+                user_id = VALUES(user_id), \
+                tweet_id = VALUES(tweet_id)"
+    
+    @property
+    def sql_delete(self):
+        return "DELETE FROM users_liked"
+
+   
+    
+    def get_data(self, response: dict) -> list:
+        users_liked = []
+        for tweet in response['data']:
+            for element in tweet["users_liked"]:
+                values = []
+                values.append(tweet["id"])
+                values.append(element["id"])
+                users_liked.append(values)
+        return users_liked
+
+        
+    def insert_many(self, json_response):
+        # print(self.get_data(json_response))
         return self.cursor.executemany(self.sql_insert , self.get_data(json_response))
 
 
